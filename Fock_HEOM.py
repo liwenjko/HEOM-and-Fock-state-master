@@ -18,54 +18,68 @@ import gc
 import os
 #from datetime import datetime
 
-lvl = 0
-photon_n = 1
-kT_K = 300 # in Kelvin
-initsite = 0 # initial state's excited site. 0 for ground state.
-#ctrfreq = 15222 # in invcm
-ctrfreq = np.average(np.diag(H_sys)) # in invcm
-polarization = np.array([0.63345607,  0.7415613 , -0.22095305]) # unit vector in 3 spatial dimensions
-tf_fs = 1000 # in fs
-timestep_fs = tf_fs/1000 # in fs 
-section = 50
-obs_modes = [np.array([0.74809864, -0.51397872,  0.41973122]), np.array([-0.19769127,  0.43117596,  0.88034394])]
-geometric_factor_abs = 1
-emission_type = "collective" # "None", "collective", or "independent"
-piecewise = False
-withflux = True
-writeoutdata = False
-foldername = 'data/LHCII_monomer_lvl3_03192023'
-special_terminators = False # Turn to False if no phonon
-pulse_shape = 'Gaussian' # 'Gaussian', 'Square'
-
-kT = kT_K * 0.695 # in cm^-1
+# constants
+kT = kT_K * 0.695 # convert Kelvin to cm^-1
 cm_to_fs = 1e5/(6*pi) # the unit of time corresponding to 1 invcm, in fs
                       # or fs^-1 to cm^-1
-sites = np.shape(H_sys)[0] # Number of sites
-dim = sites + 1
-rhodim = dim * dim
+
+# run parameters
+lvl = 0 # HEOM level
+photon_n = 1 # photon number
+kT_K = 300 # in Kelvin
+initsite = 0 # initial state's excited site. 0 for ground state.
+withflux = True # compute the photon flux
+
+# ODE integration parameters
+tf_fs = 1000 # final simulation time in fs
+timestep_fs = tf_fs/1000 # in fs 
+piecewise = False
+section = 50 # if piecewise=True, break down ODE integration into sections to save memory
 tf_cm = tf_fs/cm_to_fs # convert unit to cm
 timestep_cm = timestep_fs/cm_to_fs
 abs_tol = 1e-12
 rel_tol = 1e-3
 maxstep = tf_fs/20/cm_to_fs 
 method = 'RK45'
-n_water = 1.333
-Gamma_factor = 10000
-WWgamma = 4/(3*1.054571)*(2*pi*ctrfreq)**3*1e-24\
-         * n_water * (3*n_water**2/(2*n_water**2+1))**2 * Gamma_factor
-            # Unit spont emission rate with omega = ctrfreq,
-            # dipole = 1 debye. Final unit is in fs^-1.#WWgamma = 0.1/16 # in fs^-1
-WWgamma = WWgamma * cm_to_fs # convert unit to cm^-1
 
+# pulse parameters
+pulse_shape = 'Gaussian' # 'Gaussian', 'Square'
+#ctrfreq = 15222 # center frequency of the pulse in invcm
+ctrfreq = np.average(np.diag(H_sys)) # in invcm
 #bandwidth_fs = 0.06 #1*0.056381983409348496 # in fs^-1
 #bandwidth = bandwidth_fs * cm_to_fs # convert unit to cm^-1
 bandwidth = sqrt(np.var(np.diag(H_sys))) # in cm^-1
 bandwidth_fs = bandwidth / cm_to_fs
-
-pulse_offset_fs = 200 # (fs)
+polarization = np.array([0.63345607,  0.7415613 , -0.22095305]) # unit vector in 3 spatial dimensions
+pulse_offset_fs = 200 # center of the pulse in fs
 pulse_offset = pulse_offset_fs / cm_to_fs
-pulse_cutoff = pulse_offset + 15/bandwidth
+pulse_cutoff = pulse_offset + 15/bandwidth # turn off pulse at t > pulse_cutoff
+n_water = 1.333 # refractive index of water
+Gamma_factor = 10000 # increase the physical Wigner-Weiskopff rate by Gamma_factor for larger absorption prob.
+WWgamma = 4/(3*1.054571)*(2*pi*ctrfreq)**3*1e-24\
+         * n_water * (3*n_water**2/(2*n_water**2+1))**2 * Gamma_factor
+            # Unit spont emission rate with omega = ctrfreq,
+            # dipole = 1 debye. Final unit is in fs^-1.
+WWgamma = WWgamma * cm_to_fs # convert unit to cm^-1
+# Two other observation photon spatial modes. polarization and obs_modes form an orthonormal basis
+obs_modes = [np.array([0.74809864, -0.51397872,  0.41973122]), np.array([-0.19769127,  0.43117596,  0.88034394])]
+# Geometric factor for the absorption mode, i.e., the fraction of light in the absorption spatial mode
+# that will interact with the system
+geometric_factor_abs = 1
+emission_type = "collective" # options: "None", "collective", or "independent"
+# collective emission is the most physical
+
+# File output parameters
+writeoutdata = False
+foldername = 'data/LHCII_monomer_lvl3_03192023' # write out to the folder
+special_terminators = False # Turn to False if no phonon coupling
+# If special_terminators=True, the highest level HEOM auxiliary density matrices (terminators) 
+# follow modified time-evolution equations to capture higher level effects.
+
+# processing input parameters
+sites = np.shape(H_sys)[0] # Number of sites
+dim = sites + 1
+rhodim = dim * dim
 lambdas = np.insert(lambdas, 0, 0)
 gammas = np.insert(gammas, 0, 0)
 
@@ -90,13 +104,6 @@ H[1:, 1:] = H_sites
 rho_init = np.zeros((dim, dim), dtype=complex)
 rho_init[initsite, initsite] = 1
 
-#rho_init[0,0] = 0.5
-#rho_init[1,0] = 0.5
-#rho_init[0,1] = 0.5
-#rho_init[1,1] = 0.5
-
-#rho_init[1,0] = 0.00013325+2.15356848e-05j
-#rho_init[2,0] = -0.0001258 -1.11312300e-04j
 assert np.shape(H) == (dim, dim)
 ########################## Absorption and emission L's ########################
 indiv_Ls = {}
@@ -128,6 +135,13 @@ else:
     raise Exception("undefined emission type")
 
 ######################## FS+HEOM/HEOM Indexing ################################
+# HEOM_lvl: a list with N elements [site1, site2, ..., siteN]
+# FSHEOM_lvl: [site1, site2, ..., siteN, photon m, photon n]
+# HEOM_lvl_vecs: A list containing all the HEOM_lvl
+# FSHEOM_lvl_vecs: A list containing all the FSHEOM_lvl
+# HEOM_lvl_ind: A dictionary that maps a HEOM_lvl to it list index in HEOM_lvl_vecs
+# FSHEOM_lvl_ind: A dictionary that maps a FSHEOM_lvl to it list index in FSHEOM_lvl_vecs
+# physvec: the physical FSHEOM_lvl
 @lru_cache(maxsize=9999)
 def construct_HEOM_lvl_lst(fix_lvl, sites):
     if fix_lvl == 0 and sites == 0:
@@ -146,7 +160,6 @@ def construct_HEOM_lvl_lst(fix_lvl, sites):
 
 FSHEOM_lvl_vecs = []
 HEOM_lvl_vecs = []
-# First two indices are for FS master equations. Last two indices are for HEOM.
 for v in range(lvl+1):
     templst = construct_HEOM_lvl_lst(v, sites)
     HEOM_lvl_vecs.extend(templst)
@@ -768,37 +781,6 @@ if writeoutdata:
 
 ## plotting
 #plotrho(tpoints, rhopoints, 1, 1)
-plotrho(tpoints, rhopoints, 3, 3)
+#plotrho(tpoints, rhopoints, 3, 3)
 #plotrho(tpoints, rhopoints, 1, 2, part='R')
 #plotrho(tpoints, rhopoints, 1, 2, part='I')
-
-#temp = rhopoints[4,:] + rhopoints[8,:]
-#plt.plot(tpoints, np.real(temp))
-#eigvals, eigvecs = np.linalg.eig(H)
-#rhopoints_eig = np.zeros_like(rhopoints, dtype=complex)
-#for i in range(len(tpoints)):
-#    temp = np.reshape(rhopoints[:,i], (dim,dim))
-#    rhopoints_eig[:,i] = np.reshape(matmul(dagger(eigvecs), matmul(temp, eigvecs)), -1)
-#plotrho(tpoints, rhopoints_eig, 2, 2)
-#plotrho(tpoints, rhopoints_eig, 1, 1)
-#plotflux(tpoints, scatfluxes, 'scat')
-#fig = plt.figure()
-#from mpl_toolkits.mplot3d import Axes3D
-#ax = Axes3D(fig)
-#final_state = rhopoints[:, -1]
-#_x = np.arange(dim)
-#_y = np.arange(dim)
-#_xx, _yy = np.meshgrid(_x, _y)
-#x, y = _xx.ravel(), _yy.ravel()
-#top = np.absolute(final_state)
-#bottom = np.zeros_like(top)
-#ax.bar3d(x, y, bottom, 1, 1, top)
-
-#overall_WWgamma = np.linalg.norm(matmul(dipoles, polarization))**2*WWgamma
-#print('Gamma: '+ str(overall_WWgamma))
-#abs_prob = np.real(np.trace(np.reshape(rhopoints[:, -1], (dim,dim))[1:, 1:]))
-#print('abs prob: ' + str(abs_prob))
-#print('ratio: ' + str(abs_prob/overall_WWgamma))
-#totprob = rhopoints[1*dim+1,:]+ rhopoints[2*dim+2,:]
-#plt.plot(tpoints, np.real(totprob))
-#print('end abs prob:', str(totprob[-1]))
