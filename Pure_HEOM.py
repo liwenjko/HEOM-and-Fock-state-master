@@ -234,7 +234,7 @@ def plotrho(tpoints, rhopoints, row, col, form=None, part='R'):
 #plotrho(tpoints, rhos, 7, 7)
 #plt.legend(['1','2','3','4','5','6','7'])
     
-plt.plot(tpoints/1000, np.real(rhos[dim*0+0,:]), linestyle='dotted')
+#plt.plot(tpoints/1000, np.real(rhos[dim*0+0,:]), linestyle='dotted')
 
 
 ############################# monomer analytic ###############################
