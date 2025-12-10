@@ -141,7 +141,6 @@ def construct_HEOM_lvl_lst(fix_lvl, num_indices):
 
 FSHEOM_lvl_vecs = []
 HEOM_lvl_vecs = []
-# First two indices are for FS master equations. Last two indices are for HEOM.
 for v in range(lvl+1):
     templst = construct_HEOM_lvl_lst(v, sites*2)
     HEOM_lvl_vecs.extend(templst)
