@@ -42,7 +42,7 @@ gammas = np.array([0, 100, 100])
 kappas = np.array([0, 50, 50])
 
 kT = kT_K * 0.695 # in cm^-1
-BE_num = 1/(e**(nus/kT)-1)
+BE_num = 1/(e**(nus/kT)-1) # Bose-Einstein occupation number
 cm_to_fs = 1e5/(6*pi) # the unit of time corresponding to 1 invcm, in fs
                       # or fs^-1 to cm^-1
 sites = np.shape(H_sys)[0] # Number of sites
@@ -92,13 +92,6 @@ H[1:, 1:] = H_sites
 rho_init = np.zeros((dim, dim), dtype=complex)
 rho_init[initsite, initsite] = 1
 
-#rho_init[0,0] = 0.5
-#rho_init[1,0] = 0.5
-#rho_init[0,1] = 0.5
-#rho_init[1,1] = 0.5
-
-#rho_init[1,0] = 0.00013325+2.15356848e-05j
-#rho_init[2,0] = -0.0001258 -1.11312300e-04j
 assert np.shape(H) == (dim, dim)
 ########################## Absorption and emission L's ########################
 indiv_Ls = {}
@@ -751,11 +744,11 @@ if writeoutdata:
     logfile.close()
 
 ## plotting
-plotrho(tpoints, rhopoints, 1, 1)
-plotrho(tpoints, rhopoints, 2, 2)
-plt.ylabel('site prob')
-plt.legend(['site 1 - Fock+HEOM', 'site 2 - Fock+HEOM', 'site 1 - Fock only, explicit vibration',\
-            'site 2 - Fock only, explicit vibration'])
+#plotrho(tpoints, rhopoints, 1, 1)
+#plotrho(tpoints, rhopoints, 2, 2)
+#plt.ylabel('site prob')
+#plt.legend(['site 1 - Fock+HEOM', 'site 2 - Fock+HEOM', 'site 1 - Fock only, explicit vibration',\
+#            'site 2 - Fock only, explicit vibration'])
 #plotrho(tpoints, rhopoints, 1, 2, part='R')
 #plotrho(tpoints, rhopoints, 1, 2, part='I')
 
